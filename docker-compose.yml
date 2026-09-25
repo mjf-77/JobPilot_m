@@ -1,0 +1,45 @@
+services:
+  app:
+    build:
+      context: .
+      args:
+        # 国内服务器在 .env 里设 PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+        # 可显著提速并避免下载中断导致构建失败
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
+    ports:
+      - "8000:8000"
+    # 密钥从 .env 注入，不打进镜像层
+    env_file:
+      - .env
+    environment:
+      # 覆盖本地默认的 SQLite，指向本 compose 内的 mysql 服务
+      DATABASE_URL: mysql+pymysql://jobpilot:${MYSQL_PASSWORD}@mysql:3306/jobpilot?charset=utf8mb4
+    volumes:
+      # checkpoint（SqliteSaver）与 Chroma 向量库都要持久化，
+      # 否则每次重建容器，会话记忆和知识库索引全部丢失
+      - ./data:/app/data
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: jobpilot
+      MYSQL_USER: jobpilot
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      # 用 $$ 转义，让密码在容器内展开而不是被 compose 提前插值
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 20s
+    restart: unless-stopped
+
+volumes:
+  mysql_data:

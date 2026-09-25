@@ -1,0 +1,19 @@
+# 密钥：绝不入库
+.env
+
+# 数据与向量库（本地产物）
+data/
+*.db
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+
+# 部署脚本产物（SSH known_hosts）
+kh
+
+# 编辑器
+.vscode/
+.idea/

@@ -1,0 +1,30 @@
+# 构建上下文排除清单：没写在这里的文件都会被送进 docker daemon
+
+# 密钥绝不进镜像（运行时用 compose 的 env_file 注入）
+.env
+
+# 本地虚拟环境（镜像里会重新 pip install）
+.venv/
+venv/
+
+# 本地数据（SQLite / Chroma）——生产用卷挂载，不打包进镜像
+data/
+
+# 缓存与编译产物
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# 版本控制与 IDE
+.git/
+.gitignore
+.idea/
+.vscode/
+
+# 文档（只排除根目录的 md；skills/ 下的 SKILL.md 是运行时必需的，绝不能排除，
+# 否则镜像里 Agent 拿不到 SOP，功能直接失效）
+/*.md
+notes/
+
+# 本地模型缓存
+.cache/

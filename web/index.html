@@ -1,0 +1,1251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>JobPilot · AI 求职助手</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #fff; --line: #e5e7eb; --line-soft: #f0f1f3;
+    --text: #111827; --muted: #6b7280; --brand: #2563eb; --accent: #0f766e;
+    --shadow: 0 1px 3px rgba(16, 24, 40, .06);
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    background: var(--bg); color: var(--text);
+  }
+  button {
+    border: 1px solid var(--line); background: #fff; color: var(--text);
+    padding: 6px 12px; border-radius: 6px; font-size: 13px; cursor: pointer;
+    transition: background .15s, color .15s, border-color .15s;
+  }
+  button:hover { background: #f3f4f6; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-primary {
+    background: var(--brand); color: #fff; border-color: var(--brand); font-weight: 500;
+  }
+  .btn-primary:hover { background: #1d4ed8; }
+
+  /* ===== 整体：左栏固定窄，右侧占满 ===== */
+  .app { display: flex; height: 100vh; overflow: hidden; }
+
+  .sidebar {
+    width: 240px; flex: 0 0 240px; display: flex; flex-direction: column;
+    background: var(--card); border-right: 1px solid var(--line);
+  }
+  .brand {
+    padding: 16px 16px 12px; font-weight: 600; font-size: 15px;
+    display: flex; align-items: baseline; gap: 6px;
+  }
+  .brand .sub { color: var(--muted); font-size: 11.5px; font-weight: 400; }
+
+  .new-chat {
+    margin: 0 12px 12px; padding: 9px 12px; text-align: left;
+    background: var(--brand); color: #fff; border-color: var(--brand); font-weight: 500;
+  }
+  .new-chat:hover { background: #1d4ed8; }
+
+  .side-section {
+    padding: 8px 16px 6px; color: var(--muted);
+    font-size: 11.5px; letter-spacing: .4px;
+  }
+  .quick { display: flex; flex-direction: column; gap: 2px; padding: 0 8px 10px; }
+  .quick button {
+    text-align: left; border: none; background: transparent;
+    padding: 7px 8px; border-radius: 6px; color: #374151;
+  }
+  .quick button:hover { background: var(--line-soft); }
+
+  .thread-list { flex: 1; overflow-y: auto; padding: 0 8px 8px; }
+  .thread-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 9px; border-radius: 6px; cursor: pointer;
+    font-size: 13px; color: #374151;
+    border-left: 3px solid transparent;
+  }
+  .thread-item:hover { background: var(--line-soft); }
+  /* 选中态：左侧蓝色竖条，比单纯变色更容易扫到 */
+  .thread-item.active {
+    background: #eef2ff; color: var(--brand); font-weight: 500;
+    border-left-color: var(--brand);
+  }
+  .thread-item .title {
+    flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .thread-item .del {
+    opacity: 0; border: none; background: transparent; padding: 0 3px;
+    color: var(--muted); font-size: 14px; line-height: 1;
+  }
+  .thread-item:hover .del { opacity: 1; }
+  .thread-item .del:hover { color: #dc2626; background: transparent; }
+
+  .side-foot {
+    border-top: 1px solid var(--line); padding: 10px 12px;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  }
+  .user-box { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .avatar {
+    flex: 0 0 26px; width: 26px; height: 26px; border-radius: 50%;
+    background: var(--brand); color: #fff; font-size: 12.5px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center; text-transform: uppercase;
+  }
+  .side-foot .who {
+    font-size: 13px; color: #374151;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .side-foot button { padding: 4px 9px; font-size: 12px; flex: 0 0 auto; }
+
+  /* ===== 右侧：内容限宽居中，大屏不铺满 ===== */
+  .chat { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .wrap { width: 100%; max-width: 1160px; margin: 0 auto; padding: 0 24px; }
+
+  .chat-head { background: var(--card); border-bottom: 1px solid var(--line); }
+  .chat-head .wrap {
+    padding-top: 13px; padding-bottom: 13px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .chat-head .hint { font-size: 12.5px; color: var(--muted); }
+  .chat-head .head-left { display: flex; align-items: center; gap: 10px; }
+  .back-btn { display: none; padding: 4px 10px; font-size: 12.5px; }
+  .chat.apps-mode .back-btn { display: inline-block; }
+
+  /* 两个视图：会话 / 投递记录，同一时刻只显示一个 */
+  .chat-body {
+    flex: 1; min-height: 0; display: none; flex-direction: column;
+    width: 100%; max-width: 1160px; margin: 0 auto;
+  }
+  .chat-body.active { display: flex; }
+  /* 投递视图整页铺开，不受会话里那张卡片的高度限制 */
+  #viewApps { overflow-y: auto; padding-bottom: 24px; }
+  #viewApps .card-body { max-height: none; overflow: visible; }
+
+  /* ===== 投递记录卡片 ===== */
+  .card {
+    flex: 0 0 auto; background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); box-shadow: var(--shadow); margin: 20px 24px 0;
+  }
+  .card-head {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 12px; padding: 15px 18px 11px;
+  }
+  .card-label { font-size: 11.5px; color: var(--muted); margin-bottom: 3px; letter-spacing: .3px; }
+  .card-title { font-size: 15.5px; font-weight: 600; }
+  .card-body { padding: 0 18px 15px; max-height: 330px; overflow: auto; }
+
+  .apps-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .apps-table th {
+    position: sticky; top: 0; z-index: 1;
+    background: #f8fafc; color: #374151; font-weight: 600;
+    text-align: left; padding: 9px 10px; white-space: nowrap;
+    border-bottom: 1px solid var(--line);
+  }
+  .apps-table td {
+    padding: 9px 10px; border-bottom: 1px solid var(--line-soft); vertical-align: middle;
+  }
+  .apps-table tbody tr:hover td { background: #f8fafc; }
+  .apps-table tbody tr:last-child td { border-bottom: none; }
+  .apps-table .num { color: var(--muted); width: 34px; }
+  .app-note { color: var(--muted); }
+
+  .app-status {
+    border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px;
+    font-size: 12.5px; font-family: inherit; background: #fff; height: 30px;
+    cursor: pointer; outline: none;
+  }
+  .app-status:hover { border-color: #c7cbd1; }
+  .app-status:focus { border-color: var(--brand); }
+  .app-input {
+    width: 100%; min-width: 70px; border: 1px solid var(--brand);
+    border-radius: 6px; padding: 5px 7px;
+    font-size: 13px; font-family: inherit; outline: none;
+  }
+
+  .app-ops { white-space: nowrap; text-align: right; }
+  .icon-btn {
+    border: none; background: transparent; font-size: 14.5px;
+    padding: 3px 5px; border-radius: 6px; line-height: 1;
+  }
+  .icon-btn:hover { background: var(--line-soft); }
+  .txt-btn { border: none; background: transparent; font-size: 12.5px; padding: 3px 6px; }
+  .txt-btn:hover { background: var(--line-soft); color: var(--brand); }
+
+  .apps-empty { text-align: center; padding: 26px 0 22px; color: var(--muted); }
+  .apps-empty .ico { font-size: 30px; display: block; margin-bottom: 8px; }
+  .apps-empty .tip { font-size: 12.5px; color: #9ca3af; margin-top: 5px; }
+
+  /* 投递页里看不到聊天区，操作反馈走这个浮层 */
+  .toast {
+    position: fixed; left: 50%; bottom: 34px; z-index: 40;
+    transform: translateX(-50%) translateY(10px);
+    background: #111827; color: #fff; font-size: 13px; line-height: 1.5;
+    padding: 9px 16px; border-radius: 8px; max-width: 80vw;
+    opacity: 0; pointer-events: none;
+    transition: opacity .2s, transform .2s;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* 卡片与聊天消息之间的 24px 分隔 */
+  #messages { flex: 1; overflow-y: auto; min-height: 0; padding: 24px 24px 8px; }
+
+  .welcome { color: var(--muted); font-size: 13.5px; line-height: 2; }
+
+  .row { display: flex; margin-bottom: 16px; width: 100%; }
+  .row.user { justify-content: flex-end; }
+
+  .bubble { font-size: 14px; line-height: 1.65; word-break: break-word; }
+  .row.assistant .bubble {
+    position: relative; width: 100%; padding: 18px 20px;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+  }
+  .row.user .bubble {
+    background: var(--brand); color: #fff; border: 1px solid var(--brand);
+    padding: 11px 15px; border-radius: 10px;
+    max-width: 72%; white-space: pre-wrap;
+  }
+
+  /* 气泡内 Markdown 渲染后的样式 */
+  .bubble h1, .bubble h2, .bubble h3, .bubble h4 {
+    margin: 16px 0 8px; font-size: 15px; line-height: 1.45;
+  }
+  .bubble h1:first-child, .bubble h2:first-child,
+  .bubble h3:first-child, .bubble h4:first-child { margin-top: 0; }
+  .bubble p { margin: 8px 0; }
+  .bubble ul, .bubble ol { margin: 8px 0; padding-left: 22px; }
+  .bubble li { margin: 6px 0; }
+  .bubble table { border-collapse: collapse; margin: 12px 0; width: 100%; font-size: 13px; }
+  .bubble th, .bubble td {
+    border: 1px solid var(--line); padding: 8px 10px;
+    text-align: left; vertical-align: top; line-height: 1.65;
+  }
+  .bubble th { background: #f8fafc; font-weight: 600; white-space: nowrap; }
+  .bubble tbody tr:nth-child(even) td { background: #fafbfc; }
+  .bubble code {
+    background: #f3f4f6; padding: 1px 5px; border-radius: 3px;
+    font-family: ui-monospace, Consolas, monospace; font-size: 12.5px;
+  }
+  .bubble b { font-weight: 600; }
+
+  .copy-btn {
+    position: absolute; top: 8px; right: 8px; opacity: 0;
+    padding: 3px 9px; font-size: 11.5px; color: var(--muted); background: var(--card);
+    transition: opacity .15s;
+  }
+  .bubble:hover .copy-btn { opacity: 1; }
+  .copy-btn:hover { color: var(--brand); }
+
+  /* 等待模型输出：文字 + 三个跳动点 */
+  .thinking {
+    display: inline-flex; align-items: center; gap: 4px;
+    color: var(--muted); font-size: 13px;
+  }
+  .thinking i {
+    width: 5px; height: 5px; border-radius: 50%; background: #c7cbd1;
+    animation: blink 1.2s infinite ease-in-out;
+  }
+  .thinking i + i { animation-delay: .18s; }
+  .thinking i + i + i { animation-delay: .36s; }
+  @keyframes blink {
+    0%, 80%, 100% { opacity: .3; transform: translateY(0); }
+    40% { opacity: 1; transform: translateY(-2px); }
+  }
+
+  .note {
+    text-align: center; color: var(--accent); font-size: 12px;
+    margin: 6px 0 14px; font-family: ui-monospace, Consolas, monospace;
+  }
+
+  /* 工具调用日志：默认折叠，别把内部路由信息摊在对话里 */
+  .trace { text-align: center; margin: 4px 0 12px; }
+  .trace-toggle {
+    border: none; background: transparent; color: #9ca3af;
+    font-size: 11.5px; padding: 2px 8px;
+  }
+  .trace-toggle:hover { background: transparent; color: var(--muted); }
+  .trace-body {
+    margin-top: 3px; font-size: 11.5px; color: #9ca3af;
+    font-family: ui-monospace, Consolas, monospace;
+  }
+
+  /* ===== 底部：只剩聊天输入 ===== */
+  .composer-wrap { background: var(--card); border-top: 1px solid var(--line); }
+  .composer-wrap .wrap { padding-top: 12px; padding-bottom: 10px; }
+  #composer { display: flex; gap: 10px; }
+  textarea {
+    flex: 1; resize: none; border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px 12px; font-size: 14px; font-family: inherit; line-height: 1.5;
+    outline: none; min-height: 42px; max-height: 160px;
+  }
+  textarea:focus { border-color: var(--brand); }
+  #composer button[type="submit"] { padding: 0 20px; }
+  .composer-hint { margin-top: 7px; font-size: 11.5px; color: #9ca3af; text-align: center; }
+
+  /* ===== 弹窗 ===== */
+  .modal-mask {
+    position: fixed; inset: 0; z-index: 20; display: none;
+    align-items: center; justify-content: center; padding: 20px;
+    background: rgba(17, 24, 39, .45);
+  }
+  .modal-mask.show { display: flex; }
+  .modal {
+    width: 100%; max-width: 400px; padding: 22px;
+    background: var(--card); border-radius: var(--radius);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, .22);
+  }
+  .modal h3 { margin: 0 0 4px; font-size: 16px; }
+  .modal .sub { margin: 0 0 16px; font-size: 12.5px; color: var(--muted); }
+  .field { margin-bottom: 12px; }
+  .field label { display: block; margin-bottom: 5px; font-size: 12.5px; color: var(--muted); }
+  .field input, .field select {
+    width: 100%; border: 1px solid var(--line); border-radius: 7px;
+    padding: 8px 10px; font-size: 14px; font-family: inherit; outline: none;
+    background: #fff;
+  }
+  .field input:focus, .field select:focus { border-color: var(--brand); }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+  .modal-actions button { padding: 8px 16px; }
+
+  /* ===== 登录遮罩 ===== */
+  #loginMask {
+    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: rgba(17, 24, 39, .55); z-index: 30;
+  }
+  .login-card {
+    width: 340px; padding: 26px 24px; background: var(--card);
+    border-radius: var(--radius); box-shadow: 0 10px 40px rgba(0, 0, 0, .18);
+  }
+  .login-card h2 { margin: 0 0 4px; font-size: 18px; }
+  .login-card p { margin: 0 0 18px; color: var(--muted); font-size: 12.5px; }
+  .login-card input {
+    width: 100%; margin-bottom: 10px; padding: 9px 11px; font-size: 14px;
+    border: 1px solid var(--line); border-radius: 7px; outline: none; font-family: inherit;
+  }
+  .login-card input:focus { border-color: var(--brand); }
+  .login-row { display: flex; gap: 10px; margin-top: 6px; }
+  .login-row button { flex: 1; padding: 9px 0; font-weight: 500; }
+  #loginErr { min-height: 18px; margin-top: 10px; color: #dc2626; font-size: 12.5px; }
+
+  @media (max-width: 760px) {
+    .sidebar { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">JobPilot<span class="sub">AI 求职助手</span></div>
+    <button class="new-chat" id="newChat" type="button">+ 新会话</button>
+
+    <div class="side-section">快捷功能</div>
+    <div class="quick" id="quick"></div>
+
+    <div class="side-section">历史会话</div>
+    <div class="thread-list" id="threadList"></div>
+
+    <div class="side-foot">
+      <div class="user-box">
+        <span class="avatar" id="avatar">?</span>
+        <span class="who" id="who">未登录</span>
+      </div>
+      <button id="switchAccount" type="button" title="退出当前账号，登录其他账号">切换账号</button>
+    </div>
+  </aside>
+
+  <main class="chat">
+    <div class="chat-head">
+      <div class="wrap">
+        <div class="head-left">
+          <button id="backToChat" class="back-btn" type="button">← 返回会话</button>
+          <span class="hint" id="chatTitle">新会话</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 会话视图 -->
+    <div class="chat-body active" id="viewChat">
+      <div id="messages">
+        <div class="welcome">
+          试试下面这些说法：<br />
+          · 帮我分析这个 JD：招聘 AI 应用开发（Python），要求 3 年经验，熟悉 LangGraph / RAG<br />
+          · 帮我模拟面试，岗位是 AI 应用开发（Python）<br />
+          · 上传简历 PDF 后说「帮我优化简历」<br />
+          投递记录在左栏「投递进度」里单独管理
+        </div>
+      </div>
+    </div>
+
+    <!-- 投递视图：独立页面，点左栏「投递进度」进入 -->
+    <div class="chat-body" id="viewApps">
+      <section class="card" id="appsCard">
+        <div class="card-head">
+          <div class="card-title" id="appsSummary">加载中…</div>
+          <button type="button" id="newApp" class="btn-primary">+ 新增投递</button>
+        </div>
+        <div class="card-body" id="appsBody"></div>
+      </section>
+    </div>
+
+    <div class="composer-wrap" id="composerWrap">
+      <div class="wrap">
+        <form id="composer">
+          <input type="file" id="resumeFile" accept="application/pdf" hidden />
+          <button type="button" id="uploadBtn" title="上传简历 PDF">上传简历</button>
+          <textarea id="input" rows="1" placeholder="输入消息…"></textarea>
+          <button id="send" type="submit" class="btn-primary">发送</button>
+        </form>
+        <div class="composer-hint">Enter 发送 / Shift + Enter 换行</div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<div class="modal-mask" id="appModal">
+  <div class="modal">
+    <h3>新增投递记录</h3>
+    <p class="sub">同一公司 + 岗位会覆盖更新，不会重复</p>
+    <div class="field">
+      <label for="mCompany">公司</label>
+      <input id="mCompany" placeholder="例如：字节跳动" autocomplete="off" />
+    </div>
+    <div class="field">
+      <label for="mRole">岗位</label>
+      <input id="mRole" placeholder="例如：AI 应用开发" autocomplete="off" />
+    </div>
+    <div class="field">
+      <label for="mStatus">状态</label>
+      <select id="mStatus">
+        <option>已投递</option>
+        <option>笔试</option>
+        <option>面试</option>
+        <option>offer</option>
+        <option>已拒</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="mNote">备注（可选）</label>
+      <input id="mNote" placeholder="例如：HR 说下周一联系" autocomplete="off" />
+    </div>
+    <div class="modal-actions">
+      <button type="button" id="mCancel">取消</button>
+      <button type="button" id="mSubmit" class="btn-primary">记录</button>
+    </div>
+  </div>
+</div>
+
+<div id="loginMask">
+  <div class="login-card">
+    <h2>登录 JobPilot</h2>
+    <p>你的会话与投递记录按账号隔离保存</p>
+    <input id="loginUser" placeholder="用户名（至少 3 位）" autocomplete="username" />
+    <input id="loginPass" type="password" placeholder="密码（至少 6 位）" autocomplete="current-password" />
+    <div class="login-row">
+      <button id="doLogin" type="button" class="btn-primary">登录</button>
+      <button id="doRegister" type="button">注册</button>
+    </div>
+    <div id="loginErr"></div>
+  </div>
+</div>
+
+<script>
+  const messagesEl = document.getElementById('messages');
+  const inputEl = document.getElementById('input');
+  const chatTitle = document.getElementById('chatTitle');
+  const composer = document.getElementById('composer');
+  const sendBtn = document.getElementById('send');
+  const loginMask = document.getElementById('loginMask');
+  const loginUser = document.getElementById('loginUser');
+  const loginPass = document.getElementById('loginPass');
+  const loginErr = document.getElementById('loginErr');
+  const whoEl = document.getElementById('who');
+  const avatarEl = document.getElementById('avatar');
+  const threadListEl = document.getElementById('threadList');
+  const quickEl = document.getElementById('quick');
+  const appsSummaryEl = document.getElementById('appsSummary');
+  const appsBodyEl = document.getElementById('appsBody');
+  const chatMain = document.querySelector('.chat');
+  const viewChat = document.getElementById('viewChat');
+  const viewApps = document.getElementById('viewApps');
+  const composerWrap = document.getElementById('composerWrap');
+
+  const QUICK_ACTIONS = [
+    { label: '分析 JD', prompt: '帮我分析这个 JD：招聘 AI 应用开发（Python），要求 3 年经验，熟悉 LangGraph / RAG' },
+    { label: '优化简历', prompt: '帮我优化简历' },
+    { label: '模拟面试', prompt: '帮我模拟面试，岗位是 AI 应用开发（Python）' },
+    // 投递进度不是对话内容：切到独立的投递页面，不污染会话
+    { label: '投递进度', action: () => goApps() },
+  ];
+
+  const APP_STATUSES = ['已投递', '笔试', '面试', 'offer', '已拒'];
+
+  const uuid = () =>
+    (crypto.randomUUID ? crypto.randomUUID()
+                       : Math.random().toString(36).slice(2) + Date.now().toString(36));
+
+  const escapeHtml = (s) => String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  // 极简 Markdown 渲染：只覆盖 Agent 实际输出的语法。
+  // 自己写而不用 marked.js——部署环境在内网，引 CDN 会直接加载失败。
+  // 先转义再替换标记，否则模型输出的尖括号会变成注入点。
+  function renderMarkdown(src) {
+    const out = [];
+    let inTable = false, inUl = false, inOl = false;
+
+    const closeList = () => {
+      if (inUl) { out.push('</ul>'); inUl = false; }
+      if (inOl) { out.push('</ol>'); inOl = false; }
+    };
+    const closeTable = () => {
+      if (inTable) { out.push('</tbody></table>'); inTable = false; }
+    };
+
+    for (const raw of escapeHtml(src).split('\n')) {
+      const line = raw.trimEnd();
+
+      if (/^\s*\|.*\|\s*$/.test(line)) {
+        if (/^[\s|:-]+$/.test(line)) continue;
+        const cells = line.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+        if (!inTable) {
+          // 第一行当表头，否则表头会被当成普通数据行（不加粗、没底色）
+          closeList();
+          out.push('<table><thead><tr>'
+            + cells.map((c) => '<th>' + c + '</th>').join('') + '</tr></thead><tbody>');
+          inTable = true;
+          continue;
+        }
+        out.push('<tr>' + cells.map((c) => '<td>' + c + '</td>').join('') + '</tr>');
+        continue;
+      }
+      closeTable();
+
+      const heading = line.match(/^(#{1,6})\s+(.*)$/);
+      if (heading) {
+        closeList();
+        const level = heading[1].length;
+        out.push('<h' + level + '>' + heading[2] + '</h' + level + '>');
+        continue;
+      }
+      if (/^\s*[-*]\s+/.test(line)) {
+        if (!inUl) { closeList(); out.push('<ul>'); inUl = true; }
+        out.push('<li>' + line.replace(/^\s*[-*]\s+/, '') + '</li>');
+        continue;
+      }
+      if (/^\s*\d+\.\s+/.test(line)) {
+        if (!inOl) { closeList(); out.push('<ol>'); inOl = true; }
+        out.push('<li>' + line.replace(/^\s*\d+\.\s+/, '') + '</li>');
+        continue;
+      }
+      closeList();
+      if (line.trim()) out.push('<p>' + line + '</p>');
+    }
+    closeTable();
+    closeList();
+
+    // 用空串拼接：AI 气泡没有 pre-wrap，块级标签之间留换行会多出空行
+    return out.join('')
+      .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>');
+  }
+
+  let token = localStorage.getItem('jobpilot.token') || '';
+  let username = localStorage.getItem('jobpilot.user') || '';
+  let threadId = localStorage.getItem('jobpilot.thread') || uuid();
+  let threadTitle = '新会话';
+  let busy = false;
+
+  function authHeaders(extra) {
+    return Object.assign({ 'Authorization': 'Bearer ' + token }, extra || {});
+  }
+
+  function requireLogin(message) {
+    token = '';
+    localStorage.removeItem('jobpilot.token');
+    loginErr.textContent = message || '请先登录';
+    loginMask.style.display = 'flex';
+    loginUser.focus();
+  }
+
+  function refreshAuthUI() {
+    whoEl.textContent = username || '未登录';
+    avatarEl.textContent = (username || '?').slice(0, 1);
+    loginMask.style.display = token ? 'none' : 'flex';
+    if (!token) {
+      appsSummaryEl.textContent = '登录后查看';
+      loginUser.focus();
+      return;
+    }
+    loadThreads();
+    loadApplications();
+  }
+
+  async function doAuth(path) {
+    const u = loginUser.value.trim();
+    const p = loginPass.value;
+    loginErr.textContent = '';
+    if (u.length < 3 || p.length < 6) {
+      loginErr.textContent = '用户名至少 3 位，密码至少 6 位';
+      return;
+    }
+    try {
+      const resp = await fetch('/api/auth/' + path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: u, password: p }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) { loginErr.textContent = data.detail || ('失败：HTTP ' + resp.status); return; }
+      token = data.token;
+      username = data.username;
+      localStorage.setItem('jobpilot.token', token);
+      localStorage.setItem('jobpilot.user', username);
+      loginPass.value = '';
+      refreshAuthUI();
+    } catch (err) {
+      loginErr.textContent = '网络错误：' + err.message;
+    }
+  }
+
+  function renderQuickActions() {
+    quickEl.innerHTML = '';
+    for (const item of QUICK_ACTIONS) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = item.label;
+      b.addEventListener('click', () => (item.action ? item.action() : send(item.prompt)));
+      quickEl.appendChild(b);
+    }
+  }
+
+  // http 页面不是安全上下文，navigator.clipboard 会直接不可用，退回 textarea + execCommand
+  async function copyText(text) {
+    if (navigator.clipboard) {
+      try { await navigator.clipboard.writeText(text); return true; } catch { /* 走 fallback */ }
+    }
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch { ok = false; }
+    ta.remove();
+    return ok;
+  }
+
+  function scrollDown() { messagesEl.scrollTop = messagesEl.scrollHeight; }
+
+  function clearMessages() { messagesEl.innerHTML = ''; }
+
+  function addMessage(role, text) {
+    const row = document.createElement('div');
+    row.className = 'row ' + role;
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    if (role === 'assistant') {
+      // Markdown 渲染进独立的 .md 容器：流式更新时只替换它的内容，
+      // 不会顺手把复制按钮一起冲掉
+      const md = document.createElement('div');
+      md.className = 'md';
+      md.innerHTML = renderMarkdown(text || '');
+      bubble.appendChild(md);
+    } else {
+      bubble.textContent = text || '';
+    }
+    row.appendChild(bubble);
+    messagesEl.appendChild(row);
+    scrollDown();
+    return bubble;
+  }
+
+  function addCopyButton(bubble, text) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'copy-btn';
+    b.textContent = '复制';
+    b.title = '复制这条回复';
+    b.addEventListener('click', async () => {
+      const ok = await copyText(text);
+      b.textContent = ok ? '已复制' : '复制失败';
+      setTimeout(() => { b.textContent = '复制'; }, 1200);
+    });
+    bubble.appendChild(b);
+  }
+
+  function addNote(text) {
+    const note = document.createElement('div');
+    note.className = 'note';
+    note.textContent = text;
+    messagesEl.appendChild(note);
+    scrollDown();
+    return note;
+  }
+
+  // 投递视图里聊天区是隐藏的，反馈走 toast；会话里照旧插一条提示
+  let toastTimer = null;
+  function toast(text) {
+    const el = document.getElementById('toast');
+    el.textContent = text;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
+  }
+
+  function notify(text) {
+    if (chatMain.classList.contains('apps-mode')) toast(text);
+    else addNote(text);
+  }
+
+  // 工具调用日志：默认折叠，只留一个极淡的入口，避免内部路由信息摊在对话里
+  function addTrace() {
+    const box = document.createElement('div');
+    box.className = 'trace';
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'trace-toggle';
+    const body = document.createElement('div');
+    body.className = 'trace-body';
+    body.hidden = true;
+
+    const sync = () => { toggle.textContent = (body.hidden ? '▸ ' : '▾ ') + '执行详情'; };
+    toggle.addEventListener('click', () => { body.hidden = !body.hidden; sync(); });
+    sync();
+
+    box.appendChild(toggle);
+    box.appendChild(body);
+    messagesEl.appendChild(box);
+    scrollDown();
+    return { set: (text) => { body.textContent = text; } };
+  }
+
+  // ===== 会话列表 =====
+  async function loadThreads() {
+    try {
+      const resp = await fetch('/api/threads', { headers: authHeaders() });
+      if (resp.status === 401) { requireLogin('登录已失效，请重新登录'); return; }
+      if (!resp.ok) return;
+      renderThreads(await resp.json());
+    } catch { /* 列表加载失败不影响主流程 */ }
+  }
+
+  function renderThreads(items) {
+    threadListEl.innerHTML = '';
+    if (!items.length) {
+      const empty = document.createElement('div');
+      empty.className = 'thread-item';
+      empty.style.color = '#9ca3af';
+      empty.textContent = '暂无历史会话';
+      threadListEl.appendChild(empty);
+      return;
+    }
+    for (const item of items) {
+      const row = document.createElement('div');
+      row.className = 'thread-item' + (item.thread_id === threadId ? ' active' : '');
+
+      const title = document.createElement('span');
+      title.className = 'title';
+      title.textContent = item.title || '新会话';
+      title.title = (item.title || '') + ' · ' + (item.updated_at || '');
+      title.addEventListener('click', () => openThread(item));
+
+      const del = document.createElement('button');
+      del.className = 'del';
+      del.type = 'button';
+      del.textContent = '×';
+      del.title = '删除会话';
+      del.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await fetch('/api/threads/' + encodeURIComponent(item.thread_id), {
+          method: 'DELETE', headers: authHeaders(),
+        });
+        if (item.thread_id === threadId) startNewThread();
+        else loadThreads();
+      });
+
+      row.appendChild(title);
+      row.appendChild(del);
+      threadListEl.appendChild(row);
+    }
+  }
+
+  async function openThread(item) {
+    location.hash = ''; // 从投递页点历史会话时切回会话视图
+    threadId = item.thread_id;
+    localStorage.setItem('jobpilot.thread', threadId);
+    setChatTitle(item.title || '会话');
+    clearMessages();
+    try {
+      const resp = await fetch(
+        '/api/threads/' + encodeURIComponent(item.thread_id) + '/messages',
+        { headers: authHeaders() }
+      );
+      if (!resp.ok) return;
+      for (const msg of await resp.json()) {
+        const bubble = addMessage(msg.role, msg.content);
+        if (msg.role === 'assistant') addCopyButton(bubble, msg.content);
+      }
+    } catch { /* 忽略 */ }
+    renderThreads(await fetchThreadsSafely());
+    scrollDown();
+  }
+
+  async function fetchThreadsSafely() {
+    try {
+      const resp = await fetch('/api/threads', { headers: authHeaders() });
+      return resp.ok ? await resp.json() : [];
+    } catch { return []; }
+  }
+
+  function startNewThread() {
+    location.hash = ''; // 在投递页点「新会话」也要回到会话视图
+    threadId = uuid();
+    localStorage.setItem('jobpilot.thread', threadId);
+    setChatTitle('新会话');
+    clearMessages();
+    const w = document.createElement('div');
+    w.className = 'welcome';
+    w.textContent = '已开启新会话，说说你想做什么？';
+    messagesEl.appendChild(w);
+    loadThreads();
+  }
+
+  // ===== 发消息（SSE） =====
+  async function send(text) {
+    if (busy) return;
+    if (!token) { requireLogin('请先登录'); return; }
+
+    busy = true;
+    sendBtn.disabled = true;
+    if (!messagesEl.querySelector('.row')) clearMessages();
+
+    addMessage('user', text);
+    const bubble = addMessage('assistant', '');
+    const md = bubble.querySelector('.md');
+    md.innerHTML = '<span class="thinking">正在思考<i></i><i></i><i></i></span>';
+    let raw = '';
+    let traceEl = null;
+
+    try {
+      const resp = await fetch('/api/chat', {
+        method: 'POST',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ message: text, thread_id: threadId }),
+      });
+
+      if (resp.status === 401) { requireLogin('登录已失效，请重新登录'); return; }
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+
+        const frames = buf.split('\n\n');
+        buf = frames.pop();
+
+        for (const frame of frames) {
+          if (!frame.startsWith('data: ')) continue;
+          let ev;
+          try { ev = JSON.parse(frame.slice(6)); } catch { continue; }
+
+          if (ev.type === 'token') {
+            raw += ev.text;
+            md.innerHTML = renderMarkdown(raw);
+            scrollDown();
+          } else if (ev.type === 'agent_switch') {
+            const label = '→ ' + (ev.route || '') + (ev.skill ? '（' + ev.skill + '）' : '');
+            // 首个事件要先把内容写进去再建盒子，只 addTrace() 会得到一个永远空着的框
+            if (!traceEl) traceEl = addTrace();
+            traceEl.set(label);
+          } else if (ev.type === 'error') {
+            addNote('出错了：' + ev.message);
+          }
+        }
+      }
+    } catch (err) {
+      addNote('请求失败：' + err.message);
+    } finally {
+      if (raw) {
+        md.innerHTML = renderMarkdown(raw);
+        addCopyButton(bubble, raw);
+      } else {
+        md.innerHTML = '';
+        addNote('本轮没有返回内容');
+      }
+      busy = false;
+      sendBtn.disabled = false;
+      inputEl.focus();
+      loadThreads();
+    }
+  }
+
+  // ===== 投递记录卡片：走 REST，不经过 LLM =====
+  // 录入、改状态、编辑、删除都是确定操作，绕开模型更快也更准；
+  // 对话入口仍然保留（问「哪些超两周没回音」那类模糊问题仍走 Agent）。
+
+  let appsData = { summary: '', items: [] };
+  let editingId = null; // 正在编辑的行 id；null 表示都不在编辑态
+
+  async function loadApplications() {
+    if (!token) { appsSummaryEl.textContent = '登录后查看'; return; }
+    try {
+      const resp = await fetch('/api/applications', { headers: authHeaders() });
+      if (resp.status === 401) { requireLogin('登录已失效，请重新登录'); return; }
+      if (!resp.ok) return;
+      appsData = await resp.json();
+      renderAppsCard();
+    } catch { /* 加载失败不影响会话 */ }
+  }
+
+  // ===== 视图切换：会话 ⇄ 投递记录 =====
+  // 用 location.hash 而不是普通变量，这样浏览器后退键也能返回会话。
+  function goApps() { location.hash = 'apps'; }
+
+  function setChatTitle(t) {
+    threadTitle = t || '新会话';
+    // 投递页面用的是固定标题，切回来时再还原当前会话名
+    if (!chatMain.classList.contains('apps-mode')) chatTitle.textContent = threadTitle;
+  }
+
+  function applyHash() {
+    const apps = location.hash === '#apps';
+    chatMain.classList.toggle('apps-mode', apps);
+    viewChat.classList.toggle('active', !apps);
+    viewApps.classList.toggle('active', apps);
+    composerWrap.style.display = apps ? 'none' : '';
+    chatTitle.textContent = apps ? '投递记录' : threadTitle;
+    if (apps) loadApplications();
+    else scrollDown();
+  }
+
+  function opButton(label, cls, title, onClick) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = cls;
+    b.textContent = label;
+    if (title) b.title = title;
+    b.addEventListener('click', onClick);
+    return b;
+  }
+
+  function renderAppsCard() {
+    appsSummaryEl.textContent = appsData.summary || '（暂无投递记录）';
+    appsBodyEl.innerHTML = '';
+
+    if (!appsData.items.length) {
+      const box = document.createElement('div');
+      box.className = 'apps-empty';
+      box.innerHTML = '<span class="ico">📭</span>暂无投递记录';
+      const tip = document.createElement('div');
+      tip.className = 'tip';
+      tip.textContent = '点右上角「+ 新增投递」记下第一条';
+      box.appendChild(tip);
+      appsBodyEl.appendChild(box);
+      return;
+    }
+
+    const table = document.createElement('table');
+    table.className = 'apps-table';
+    const head = table.createTHead().insertRow();
+    for (const label of ['公司', '岗位', '状态', '更新时间', '备注', '操作']) {
+      const th = document.createElement('th');
+      th.textContent = label;
+      head.appendChild(th);
+    }
+
+    const tbody = table.createTBody();
+    for (const item of appsData.items) {
+      const editing = item.id === editingId;
+      const tr = tbody.insertRow();
+      const inputs = {};
+
+      // 公司名和岗位名也能改：按 id 更新，不用「删了再加」
+      for (const field of ['company', 'role']) {
+        const td = tr.insertCell();
+        if (editing) {
+          const inp = document.createElement('input');
+          inp.className = 'app-input';
+          inp.value = item[field];
+          inputs[field] = inp;
+          td.appendChild(inp);
+        } else {
+          td.textContent = item[field];
+        }
+      }
+
+      // 状态：非编辑态改完立刻提交（最高频操作）；编辑态下跟着「保存」一起提交
+      const statusTd = tr.insertCell();
+      const select = document.createElement('select');
+      select.className = 'app-status';
+      for (const s of APP_STATUSES) {
+        const opt = document.createElement('option');
+        opt.value = s;
+        opt.textContent = s;
+        if (s === item.status) opt.selected = true;
+        select.appendChild(opt);
+      }
+      select.addEventListener('change', () => {
+        if (editing) return;
+        saveApp(item.id, {
+          company: item.company, role: item.role, note: item.note, status: select.value,
+        });
+      });
+      statusTd.appendChild(select);
+
+      const timeTd = tr.insertCell();
+      timeTd.textContent = item.updated_at;
+
+      const noteTd = tr.insertCell();
+      noteTd.className = 'app-note';
+      if (editing) {
+        const inp = document.createElement('input');
+        inp.className = 'app-input';
+        inp.value = item.note;
+        inputs.note = inp;
+        noteTd.appendChild(inp);
+      } else {
+        noteTd.textContent = item.note;
+      }
+
+      const opTd = tr.insertCell();
+      opTd.className = 'app-ops';
+      if (editing) {
+        opTd.appendChild(opButton('保存', 'txt-btn', '', () => {
+          if (!inputs.company.value.trim() || !inputs.role.value.trim()) {
+            notify('公司和岗位不能为空');
+            return;
+          }
+          saveApp(item.id, {
+            company: inputs.company.value.trim(),
+            role: inputs.role.value.trim(),
+            status: select.value,
+            note: inputs.note.value.trim(),
+          }, () => { editingId = null; });
+        }));
+        opTd.appendChild(opButton('取消', 'txt-btn', '', () => {
+          editingId = null;
+          renderAppsCard();
+        }));
+      } else {
+        // 针对这条投递记录发起模拟面试。
+        // 面试过程是对话内容，所以要先切回会话视图，否则用户看不到任何反馈。
+        opTd.appendChild(opButton('🎤', 'icon-btn', '针对这个岗位模拟面试', () => {
+          location.hash = '';
+          send('帮我模拟面试，岗位是' + item.company + '的 ' + item.role);
+        }));
+        opTd.appendChild(opButton('✏️', 'icon-btn', '编辑这条记录', () => {
+          editingId = item.id;
+          renderAppsCard();
+        }));
+        opTd.appendChild(opButton('🗑', 'icon-btn', '删除这条记录', () => {
+          // 用户自己点的删除，意图是明确的，一次 confirm 就够；
+          // 对话路径里的删除是模型判断出来的意图，才需要 interrupt 那种重确认。
+          if (confirm('删除「' + item.company + ' · ' + item.role + '」？')) removeApp(item.id);
+        }));
+      }
+    }
+    appsBodyEl.appendChild(table);
+  }
+
+  async function saveApp(id, payload, onDone) {
+    try {
+      const resp = await fetch('/api/applications/' + id, {
+        method: 'PUT',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(payload),
+      });
+      if (resp.status === 401) { requireLogin('登录已失效，请重新登录'); return; }
+      const body = await resp.json().catch(() => ({}));
+      if (resp.status === 409) { notify('保存失败：' + body.detail); return; }
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      appsData = body;
+      if (onDone) onDone();
+      renderAppsCard();
+    } catch (err) {
+      notify('保存失败：' + err.message);
+    }
+  }
+
+  async function removeApp(id) {
+    try {
+      const resp = await fetch('/api/applications/' + id, {
+        method: 'DELETE', headers: authHeaders(),
+      });
+      if (resp.status === 401) { requireLogin('登录已失效，请重新登录'); return; }
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      appsData = await resp.json();
+      renderAppsCard();
+    } catch (err) {
+      notify('删除失败：' + err.message);
+    }
+  }
+
+  // ===== 新增投递弹窗 =====
+  const appModal = document.getElementById('appModal');
+  const mCompany = document.getElementById('mCompany');
+  const mRole = document.getElementById('mRole');
+  const mStatus = document.getElementById('mStatus');
+  const mNote = document.getElementById('mNote');
+  const mSubmit = document.getElementById('mSubmit');
+
+  function openAppModal() {
+    if (!token) { requireLogin('请先登录'); return; }
+    mCompany.value = '';
+    mRole.value = '';
+    mStatus.value = '已投递';
+    mNote.value = '';
+    appModal.classList.add('show');
+    mCompany.focus();
+  }
+
+  function closeAppModal() { appModal.classList.remove('show'); }
+
+  document.getElementById('newApp').addEventListener('click', openAppModal);
+  document.getElementById('mCancel').addEventListener('click', closeAppModal);
+  appModal.addEventListener('click', (e) => { if (e.target === appModal) closeAppModal(); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && appModal.classList.contains('show')) closeAppModal();
+  });
+
+  async function submitApp() {
+    if (!mCompany.value.trim() || !mRole.value.trim()) {
+      notify('公司和岗位都要填');
+      return;
+    }
+    mSubmit.disabled = true;
+    try {
+      const resp = await fetch('/api/applications', {
+        method: 'POST',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          company: mCompany.value.trim(),
+          role: mRole.value.trim(),
+          status: mStatus.value,
+          note: mNote.value.trim(),
+        }),
+      });
+      if (resp.status === 401) { requireLogin('登录已失效，请重新登录'); return; }
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(resp.status === 422 ? '内容不合法' : 'HTTP ' + resp.status);
+      appsData = data;
+      renderAppsCard();
+      closeAppModal();
+      notify(data.message || '已记录');
+      mCompany.focus();
+    } catch (err) {
+      notify('记录失败：' + err.message);
+    } finally {
+      mSubmit.disabled = false;
+    }
+  }
+
+  mSubmit.addEventListener('click', submitApp);
+  for (const el of [mCompany, mRole, mNote]) {
+    el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submitApp(); } });
+  }
+
+  // ===== 底部输入与其它 =====
+  composer.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const text = inputEl.value.trim();
+    if (!text) return;
+    inputEl.value = '';
+    inputEl.style.height = 'auto';
+    send(text);
+  });
+
+  inputEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      composer.requestSubmit();
+    }
+  });
+
+  inputEl.addEventListener('input', () => {
+    inputEl.style.height = 'auto';
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 160) + 'px';
+  });
+
+  document.getElementById('newChat').addEventListener('click', startNewThread);
+
+  // 切换账号：清掉当前凭证回到登录界面。
+  // 必须同时清空会话列表、消息区与投递卡片，否则会短暂看到上一个账号的数据。
+  document.getElementById('switchAccount').addEventListener('click', () => {
+    token = '';
+    username = '';
+    localStorage.removeItem('jobpilot.token');
+    localStorage.removeItem('jobpilot.user');
+    location.hash = ''; // 切账号时退回会话视图
+
+    threadId = uuid();
+    localStorage.setItem('jobpilot.thread', threadId);
+    setChatTitle('新会话');
+    clearMessages();
+    threadListEl.innerHTML = '';
+    editingId = null;
+    appsData = { summary: '', items: [] };
+    appsSummaryEl.textContent = '登录后查看';
+    appsBodyEl.innerHTML = '';
+    closeAppModal();
+
+    loginUser.value = '';
+    loginPass.value = '';
+    loginErr.textContent = '请输入要切换到的账号';
+    refreshAuthUI();
+  });
+
+  document.getElementById('doLogin').addEventListener('click', () => doAuth('login'));
+  document.getElementById('doRegister').addEventListener('click', () => doAuth('register'));
+  loginPass.addEventListener('keydown', (e) => { if (e.key === 'Enter') doAuth('login'); });
+
+  // 上传简历：后端解析后写入会话 state，resume_coach 直接读，不需要用户粘贴
+  const fileEl = document.getElementById('resumeFile');
+  document.getElementById('uploadBtn').addEventListener('click', () => fileEl.click());
+
+  fileEl.addEventListener('change', async () => {
+    const file = fileEl.files[0];
+    if (!file) return;
+    if (!token) { requireLogin('请先登录'); fileEl.value = ''; return; }
+
+    const noteEl = addNote('正在上传并解析 ' + file.name + ' …');
+    const form = new FormData();
+    form.append('file', file);
+    form.append('thread_id', threadId);
+
+    try {
+      const resp = await fetch('/api/resume/upload', {
+        method: 'POST', headers: authHeaders(), body: form,
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (resp.status === 401) { requireLogin('登录已失效，请重新登录'); return; }
+      if (!resp.ok) { noteEl.textContent = '上传失败：' + (data.detail || resp.status); return; }
+
+      noteEl.textContent = '简历已解析（' + data.chars + ' 字）';
+      const bubble = addMessage('assistant', '已读取你的简历（共 ' + data.chars + ' 字）。\n\n'
+        + data.preview + '…\n\n可以说「帮我优化简历」，我会逐条给出改写建议。');
+      addCopyButton(bubble, '已读取你的简历（共 ' + data.chars + ' 字）。');
+    } catch (err) {
+      noteEl.textContent = '上传失败：' + err.message;
+    } finally {
+      fileEl.value = '';
+    }
+  });
+
+  // ===== 初始化：等所有函数与变量就绪后再跑 =====
+  document.getElementById('backToChat').addEventListener('click', () => { location.hash = ''; });
+  window.addEventListener('hashchange', applyHash);
+  refreshAuthUI();
+  renderQuickActions();
+  applyHash();
+</script>
+</body>
+</html>

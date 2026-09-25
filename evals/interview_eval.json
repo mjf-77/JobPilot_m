@@ -1,0 +1,22 @@
+[
+  {"query": "你们怎么知道检索出来的东西是对的？", "gold": "RAG-001"},
+  {"query": "怎么判断一次改动是变好了还是变坏了", "gold": "RAG-001"},
+  {"query": "chunk 切多大合适，重叠留多少", "gold": "RAG-002"},
+  {"query": "为什么要用 BM25 这种老技术，光靠向量不行吗", "gold": "RAG-003"},
+  {"query": "向量检索在什么情况下会失效", "gold": "RAG-003"},
+  {"query": "检索返回几条比较合适", "gold": "RAG-004"},
+  {"query": "怎么防止大模型胡说八道", "gold": "RAG-006"},
+  {"query": "rerank 是干嘛的，和向量检索有啥区别", "gold": "RAG-007"},
+  {"query": "知识库文档更新了怎么同步进去", "gold": "RAG-008"},
+  {"query": "Agent 是怎么决定用哪个工具的", "gold": "AGENT-001"},
+  {"query": "Agent 执行到一半中断了怎么恢复", "gold": "AGENT-002"},
+  {"query": "为什么要拆成多个 Agent 协作", "gold": "AGENT-003"},
+  {"query": "怎么防止 Agent 一直循环调用停不下来", "gold": "AGENT-004"},
+  {"query": "危险操作怎么加保护，比如自动提交", "gold": "AGENT-005"},
+  {"query": "对话太长了上下文放不下怎么办", "gold": "AGENT-006"},
+  {"query": "大模型接口超时了怎么处理", "gold": "ENG-001"},
+  {"query": "流式输出是怎么实现的", "gold": "ENG-002"},
+  {"query": "怎么统计每次调用花了多少钱", "gold": "ENG-003"},
+  {"query": "多个用户同时用会不会串数据", "gold": "ENG-004"},
+  {"query": "线上出问题你怎么排查", "gold": "ENG-006"}
+]

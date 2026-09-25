@@ -1,0 +1,37 @@
+# 直接照抄本地验证过的版本，保证「本地能跑 = 镜像能跑」
+# 升级依赖时请同步更新这里，并重跑 tests/ 下的自检脚本
+
+# --- Web 层 ---
+fastapi==0.141.1
+uvicorn==0.53.0
+pydantic==2.13.5
+pydantic-settings==2.15.0
+python-multipart==0.0.20
+
+# --- 文档解析（简历上传）---
+pypdf==6.19.0
+
+# --- LLM / Agent 编排 ---
+openai==3.16.2
+langgraph==1.2.12
+langgraph-checkpoint==4.2.0
+langgraph-checkpoint-sqlite==3.1.1
+langchain-core==1.6.4
+langchain-openai==1.6.3
+tiktoken==0.14.0
+
+# --- 检索（hybrid: 向量 + BM25）---
+chromadb==1.5.9
+rank-bm25==0.2.2
+jieba==0.42.1
+numpy==2.2.6
+
+# --- 数据层（本地 SQLite / 生产 MySQL 同一套代码）---
+SQLAlchemy==2.0.54
+PyMySQL==1.2.3
+
+# --- 认证 ---
+PyJWT==2.14.0
+
+# --- 自检脚本用 ---
+httpx==0.28.1
