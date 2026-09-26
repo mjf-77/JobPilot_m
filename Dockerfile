@@ -26,6 +26,7 @@ COPY .tiktoken /app/.tiktoken
 COPY app ./app
 COPY web ./web
 COPY skills ./skills
+COPY templates ./templates
 COPY seed ./seed
 COPY scripts ./scripts
 COPY evals ./evals

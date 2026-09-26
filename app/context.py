@@ -16,6 +16,7 @@ import tiktoken
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
 from app.config import settings
+from app.db.profiles import format_block
 from app.graph.state import AgentState
 from app.llm import chat
 
@@ -61,17 +62,30 @@ def build_messages(
     state: AgentState,
     budget: int | None = None,
 ) -> list[BaseMessage]:
-    """组装本轮发给模型的消息：system（必留）→ 历史摘要 → 预算内最近的原文历史。"""
+    """组装本轮发给模型的消息：
+
+    system（必留）→ 长期画像 → 本轮历史摘要 → 预算内最近的原文历史。
+
+    画像排在摘要前面，因为它是「这个人是谁」，比「这次聊了什么」更基础；
+    而且它不随会话增长，成本恒定（就几条 KV）。
+    """
     budget = budget or settings.context_budget_tokens
     remaining = budget - count_tokens([system])
 
     prefix: list[BaseMessage] = []
+
+    profile_block = format_block(state.get("user_profile") or {})
+    if profile_block:
+        prefix.append(SystemMessage(content=profile_block))
+        remaining -= count_tokens([prefix[-1]])
+
     if state.get("summary"):
-        summary_msg = SystemMessage(
-            content=f"<history_summary>\n{state['summary']}\n</history_summary>"
+        prefix.append(
+            SystemMessage(
+                content=f"<history_summary>\n{state['summary']}\n</history_summary>"
+            )
         )
-        prefix = [summary_msg]
-        remaining -= count_tokens(prefix)
+        remaining -= count_tokens([prefix[-1]])
 
     # 已被摘要覆盖的部分不再发送原文，避免同一信息出现两次
     pending = state["messages"][state.get("summarized_count", 0):]

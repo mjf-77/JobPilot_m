@@ -12,7 +12,12 @@ from langgraph.graph.message import add_messages
 
 # Supervisor 可路由到的目标（每新增一个 Agent，这里加一项）
 RouteTarget = Literal[
-    "jd_analyst", "resume_coach", "mock_interviewer", "progress_tracker", "chat"
+    "jd_analyst",
+    "resume_coach",
+    "resume_builder",
+    "mock_interviewer",
+    "progress_tracker",
+    "chat",
 ]
 
 
@@ -33,3 +38,6 @@ class AgentState(TypedDict, total=False):
     interview: dict
     # 上传的简历原文（按会话保存，供简历优化 Agent 使用；不混入对话历史）
     resume_text: str
+    # 从零制作简历的结构化草稿：多轮累积，齐了就能渲染成 PDF。
+    # 没有 reducer 的字段是「整字段替换」语义，所以写入方负责合并旧值（见 resume_builder）。
+    resume_draft: dict

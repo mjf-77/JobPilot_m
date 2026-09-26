@@ -119,6 +119,15 @@ def list_all(status: str = "", user_id: str = "") -> str:
     return to_markdown(list_rows(status, user_id))
 
 
+def list_user_ids() -> list[str]:
+    """有投递记录的所有用户——定时提醒要遍历的对象。
+
+    从 applications 反查而不是查 users:没有投递记录的用户本来就不需要提醒。
+    """
+    with SessionLocal() as session:
+        return list(session.scalars(select(Application.user_id).distinct()).all())
+
+
 def update(
     app_id: int,
     company: str,

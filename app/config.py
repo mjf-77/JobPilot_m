@@ -54,6 +54,19 @@ class Settings(BaseSettings):
     price_input_per_million: float = 2.0
     price_output_per_million: float = 8.0
 
+    # ---- 定时任务 ----
+    # 自检脚本里不需要后台调度线程，用环境变量关掉即可
+    scheduler_enabled: bool = True
+    # 每日投递复盘的执行时间
+    digest_hour: int = 9
+    digest_minute: int = 0
+
+    # ---- Redis（跨请求的会话锁与每日配额）----
+    # 连不上会自动降级（不锁不限流），所以本地不装 Redis 也能跑
+    redis_url: str = "redis://127.0.0.1:6379/0"
+    # 单用户每日 token 上限，防止一个账号把模型的 API 额度刷完
+    daily_token_quota: int = 300_000
+
     # ---- 数据库 ----
     # 本地默认 SQLite；部署时用环境变量覆盖为：
     #   mysql+pymysql://user:password@mysql:3306/jobpilot?charset=utf8mb4

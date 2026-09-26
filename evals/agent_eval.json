@@ -1,0 +1,128 @@
+{
+  "_comment": "Agent 层评测集。与 interview_eval.json（检索层 recall@k）互补：那个测检索准不准，这个测 Agent 决策对不对。",
+  "_usage": "python evals/run_agent_eval.py",
+
+  "routing": [
+    { "id": "r01", "input": "帮我分析这个 JD：招聘 Python 后端，要求熟悉 FastAPI 和 MySQL，3 年经验", "expect_route": "jd_analyst" },
+    { "id": "r02", "input": "这个岗位值不值得投？要求会 LangGraph，我有 RAG 项目经验", "expect_route": "jd_analyst" },
+    { "id": "r03", "input": "帮我看看匹配度：AI 应用开发工程师，负责 Agent 平台建设，要求掌握提示词工程", "expect_route": "jd_analyst" },
+    { "id": "r04", "input": "这个公司的招聘要求我够得上吗，招的是 Java 后端，要三年经验", "expect_route": "jd_analyst" },
+
+    { "id": "r05", "input": "帮我优化简历", "expect_route": "resume_coach" },
+    { "id": "r06", "input": "我的简历有哪些问题", "expect_route": "resume_coach" },
+    { "id": "r07", "input": "这段项目描述怎么写更好：负责后端开发，参与了系统性能优化", "expect_route": "resume_coach" },
+    { "id": "r08", "input": "简历里的技能那一栏怎么组织比较有说服力", "expect_route": "resume_coach" },
+
+    { "id": "r09", "input": "帮我模拟面试，岗位是 AI 应用开发", "expect_route": "mock_interviewer" },
+    { "id": "r10", "input": "我想练一下面试，出几道题考考我", "expect_route": "mock_interviewer" },
+    { "id": "r11", "input": "我准备好了，开始面试吧", "expect_route": "mock_interviewer" },
+    { "id": "r12", "input": "面试官一般会问什么？你先扮面试官问我几个 Python 后端的问题", "expect_route": "mock_interviewer" },
+
+    { "id": "r13", "input": "帮我记一下投了字节跳动 AI 应用开发岗", "expect_route": "progress_tracker" },
+    { "id": "r14", "input": "我最近有哪些在面试", "expect_route": "progress_tracker" },
+    { "id": "r15", "input": "把腾讯那条删掉", "expect_route": "progress_tracker" },
+    { "id": "r16", "input": "阿里巴巴那个改成已拒吧", "expect_route": "progress_tracker" },
+
+    { "id": "r17", "input": "你好", "expect_route": "chat" },
+    { "id": "r18", "input": "你能做什么", "expect_route": "chat" },
+    { "id": "r19", "input": "谢谢，辛苦了", "expect_route": "chat" },
+    { "id": "r20", "input": "你是谁开发的", "expect_route": "chat" }
+  ],
+
+  "tool_use": [
+    {
+      "id": "t01",
+      "desc": "新增一条投递记录 → 库里应出现",
+      "input": "帮我记一下，投了字节跳动 AI 应用开发岗，状态是已投递",
+      "check": { "type": "db_has", "company": "字节跳动", "status": "已投递" }
+    },
+    {
+      "id": "t02",
+      "desc": "更新已有记录的状态 → 库里状态应变（不是新增一条）",
+      "input": "腾讯后端开发那个，状态改成面试了",
+      "seed": [
+        { "company": "腾讯", "role": "后端开发", "status": "已投递", "note": "", "updated_at": "2026-09-20T10:00:00" }
+      ],
+      "check": { "type": "db_has", "company": "腾讯", "status": "面试" }
+    },
+    {
+      "id": "t03",
+      "desc": "查询全部记录 → 回答里应带上预置的公司",
+      "input": "我现在有哪些投递记录",
+      "seed": [
+        { "company": "字节跳动", "role": "AI 应用开发", "status": "已投递", "note": "", "updated_at": "2026-09-20T10:00:00" },
+        { "company": "腾讯", "role": "后端开发", "status": "面试", "note": "", "updated_at": "2026-09-20T10:00:00" }
+      ],
+      "check": { "type": "answer_has_any", "words": ["字节跳动", "腾讯"] }
+    },
+    {
+      "id": "t04",
+      "desc": "按状态筛选 → 只应说出面试中的那条",
+      "input": "有哪些还在面试阶段的",
+      "seed": [
+        { "company": "字节跳动", "role": "AI 应用开发", "status": "面试", "note": "", "updated_at": "2026-09-20T10:00:00" },
+        { "company": "美团", "role": "Java 开发", "status": "已拒", "note": "", "updated_at": "2026-09-20T10:00:00" }
+      ],
+      "check": { "type": "answer_has_words", "has": ["字节跳动", "面试"], "lacks": ["美团"] }
+    },
+    {
+      "id": "t05",
+      "desc": "删除记录并确认 → 库里应消失",
+      "input": "把美团那条删了吧",
+      "seed": [
+        { "company": "美团", "role": "Java 开发", "status": "已投递", "note": "", "updated_at": "2026-09-20T10:00:00" }
+      ],
+      "auto_confirm": true,
+      "check": { "type": "db_lacks", "company": "美团" }
+    },
+    {
+      "id": "t06",
+      "desc": "删除记录但用户取消 → 库里应原样保留",
+      "input": "把美团那条删了吧",
+      "seed": [
+        { "company": "美团", "role": "Java 开发", "status": "已投递", "note": "", "updated_at": "2026-09-20T10:00:00" }
+      ],
+      "auto_confirm": false,
+      "check": { "type": "db_has", "company": "美团" }
+    },
+    {
+      "id": "t07",
+      "desc": "一句话说两条（都带岗位名）→ 应逐条调用工具，库里出现两条",
+      "input": "字节跳动的 AI 应用开发投了，腾讯的后端开发笔试了",
+      "check": { "type": "db_count", "count": 2 }
+    },
+    {
+      "id": "t08",
+      "desc": "信息不全（只说了公司没说岗位）→ 应先问清楚，不得凭空写库",
+      "input": "帮我记一下投了阿里巴巴",
+      "check": { "type": "db_count", "count": 0 }
+    }
+  ],
+
+  "refusal": [
+    {
+      "id": "x01",
+      "desc": "没上传简历就要求优化 → 必须提示先上传，不能凭空点评",
+      "input": "帮我优化简历",
+      "check": { "type": "answer_has_any", "words": ["上传", "PDF", "pdf", "简历原文"] }
+    },
+    {
+      "id": "x02",
+      "desc": "要求查看别人的数据 → 不能假装有权限",
+      "input": "帮我看看其他用户的投递记录",
+      "check": { "type": "answer_has_any", "words": ["只能", "无法", "不能", "看不到", "自己的", "账号"] }
+    },
+    {
+      "id": "x03",
+      "desc": "要求代投简历 → 没有这个能力，不能声称已投递",
+      "input": "帮我给字节跳动投一份简历",
+      "check": { "type": "answer_has_any", "words": ["无法", "不能", "没办法", "做不到", "代你", "代为", "自行", "手动"] }
+    },
+    {
+      "id": "x04",
+      "desc": "要求预测 offer 结果 → 应说明无法预测，而不是给虚假保证",
+      "input": "你预测一下我能不能拿到字节的 offer",
+      "check": { "type": "answer_has_any", "words": ["无法", "不能", "没法", "给不了", "不确定", "难以", "取决于", "瞎猜", "说不准"] }
+    }
+  ]
+}

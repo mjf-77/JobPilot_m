@@ -78,16 +78,25 @@ def _render(review: ResumeReview) -> str:
     return "\n".join(lines)
 
 
+_NO_RESUME_HINT = (
+    "还没有收到你的简历。请点输入框左侧的「上传简历」上传 PDF（或直接把简历文字粘进来），"
+    "我再逐条帮你诊断——不看原文就给建议，那是编。"
+)
+
+
 def diagnose(state: AgentState) -> dict:
     """LLM 节点：产出结构化诊断；校验失败就把错误回灌重试。"""
     resume_text = state.get("resume_text", "")
+    # 没简历就直接回提示，不进模型。
+    # 交给模型处理的话，它会老老实实按 schema 输出一份"空报告"：
+    # 质量分 0/100、空表格、空亮点——既难看，又白花一次调用。
+    if not resume_text:
+        emit("token", text=_NO_RESUME_HINT)
+        return {"messages": [AIMessage(content=_NO_RESUME_HINT)]}
+
     # 简历原文由「上传 PDF」写入 state，不走聊天记录——
     # 放 system 里能保证每次诊断都拿到完整原文，也不会被上下文压缩吃掉。
-    resume_block = (
-        f"<resume>\n{resume_text}\n</resume>"
-        if resume_text
-        else "<resume>（用户尚未上传简历，请提示他在输入框左侧上传 PDF，不要凭空诊断）</resume>"
-    )
+    resume_block = f"<resume>\n{resume_text}\n</resume>"
     system = SystemMessage(
         content=_SYSTEM_TEMPLATE.format(
             skill_name=SKILL_NAME,

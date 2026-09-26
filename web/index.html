@@ -12,6 +12,9 @@
     --radius: 12px;
   }
   * { box-sizing: border-box; }
+  /* 必须显式写这条：作者样式里的 display 会盖过浏览器默认的 [hidden]{display:none}，
+     结果就是「设了 hidden 却还显示着」——收起按钮点了没反应。 */
+  [hidden] { display: none !important; }
   html, body { height: 100%; margin: 0; }
   body {
     font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
@@ -104,20 +107,65 @@
 
   .chat-head { background: var(--card); border-bottom: 1px solid var(--line); }
   .chat-head .wrap {
+    position: relative;
     padding-top: 13px; padding-bottom: 13px;
     display: flex; align-items: center; justify-content: space-between;
   }
   .chat-head .hint { font-size: 12.5px; color: var(--muted); }
   .chat-head .head-left { display: flex; align-items: center; gap: 10px; }
+  .chat-head .head-right { display: flex; align-items: center; gap: 2px; }
   .back-btn { display: none; padding: 4px 10px; font-size: 12.5px; }
   .chat.apps-mode .back-btn { display: inline-block; }
 
+  /* 横向容器：会话/投递视图 + 简历预览面板并排。限宽在这一层 */
+  .chat-main {
+    flex: 1; min-height: 0;
+    width: 100%; max-width: 1160px; margin: 0 auto;
+    display: flex;
+  }
+
   /* 两个视图：会话 / 投递记录，同一时刻只显示一个 */
   .chat-body {
-    flex: 1; min-height: 0; display: none; flex-direction: column;
-    width: 100%; max-width: 1160px; margin: 0 auto;
+    flex: 1; min-height: 0; min-width: 0;
+    display: none; flex-direction: column;
   }
   .chat-body.active { display: flex; }
+
+  /* ===== 简历预览面板：边聊边看，每轮对话后刷新 ===== */
+  .resume-panel {
+    flex: 0 0 400px;
+    min-width: 0;   /* 不加的话 flex 项会被内部 min-content 撑宽（实测多出 13px） */
+    display: flex; flex-direction: column;
+    border-left: 1px solid var(--line);
+    background: #eceef2;
+  }
+  .resume-panel-head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 8px; padding: 9px 10px 9px 14px;
+    background: var(--card); border-bottom: 1px solid var(--line);
+    font-size: 12.5px; font-weight: 600;
+  }
+  .resume-panel-actions { display: flex; align-items: center; gap: 2px; }
+  .resume-viewport { flex: 1; min-height: 0; overflow: auto; padding: 12px; }
+  /* 缩放的做法：外层占位元素按「缩放后」的尺寸参与布局，内层 iframe 保持
+     真实 A4 宽度（794px）只做视觉 transform。
+     为什么不用 zoom：zoom 会把 iframe 的**内部视口**也缩小到 375px，
+     简历就被按窄屏重排了（换行变多、三栏对齐失效、内容被截断），
+     看到的根本不是真实版式。transform 只缩放呈现，内部仍是 794px。 */
+  .resume-scaler {
+    width: calc(794px * var(--s, 0.47));
+    height: calc(1124px * var(--s, 0.47));
+  }
+  .resume-frame {
+    width: 794px; height: 1124px;   /* A4 @96dpi */
+    border: 0; background: #fff;
+    box-shadow: 0 2px 10px rgba(16, 24, 40, .12);
+    transform: scale(var(--s, 0.47));
+    transform-origin: top left;
+  }
+  @media (max-width: 900px) {
+    .resume-panel { flex-basis: 300px; }
+  }
   /* 投递视图整页铺开，不受会话里那张卡片的高度限制 */
   #viewApps { overflow-y: auto; padding-bottom: 24px; }
   #viewApps .card-body { max-height: none; overflow: visible; }
@@ -270,6 +318,36 @@
     font-family: ui-monospace, Consolas, monospace;
   }
 
+  /* ===== 提醒（定时任务主动推来的内容） ===== */
+  .bell-btn {
+    position: relative; border: none; background: transparent;
+    font-size: 16px; line-height: 1; padding: 5px 8px; border-radius: 6px;
+  }
+  .bell-btn:hover { background: var(--line-soft); }
+  .bell-dot {
+    position: absolute; top: 3px; right: 4px;
+    width: 7px; height: 7px; border-radius: 50%; background: #dc2626;
+  }
+  .notif-panel {
+    position: absolute; top: 44px; right: 24px; z-index: 15;
+    width: 340px; max-height: 380px; overflow-y: auto;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); box-shadow: 0 10px 28px rgba(16, 24, 40, .14);
+  }
+  .notif-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 11px 14px; border-bottom: 1px solid var(--line);
+    font-size: 13px; font-weight: 600;
+  }
+  .notif-item {
+    padding: 12px 14px; border-bottom: 1px solid var(--line-soft);
+    font-size: 13px; line-height: 1.65;
+  }
+  .notif-item:last-child { border-bottom: none; }
+  .notif-item.unread { background: #f8faff; }
+  .notif-time { margin-top: 6px; font-size: 11.5px; color: #9ca3af; }
+  .notif-empty { padding: 26px; text-align: center; color: var(--muted); font-size: 13px; }
+
   /* ===== 底部：只剩聊天输入 ===== */
   .composer-wrap { background: var(--card); border-top: 1px solid var(--line); }
   .composer-wrap .wrap { padding-top: 12px; padding-bottom: 10px; }
@@ -361,9 +439,24 @@
           <button id="backToChat" class="back-btn" type="button">← 返回会话</button>
           <span class="hint" id="chatTitle">新会话</span>
         </div>
+        <div class="head-right">
+          <button id="resumeToggle" class="bell-btn" type="button" title="显示 / 隐藏简历预览">📄</button>
+          <button id="bellBtn" class="bell-btn" type="button" title="提醒">
+            🔔<span id="bellDot" class="bell-dot" hidden></span>
+          </button>
+        </div>
+        <div id="notifPanel" class="notif-panel" hidden>
+          <div class="notif-head">
+            <span>提醒</span>
+            <button id="notifRead" class="txt-btn" type="button">全部已读</button>
+          </div>
+          <div id="notifList"></div>
+        </div>
       </div>
     </div>
 
+    <!-- chat-main：横向容器，装「会话/投递视图」和「简历预览面板」 -->
+    <div class="chat-main">
     <!-- 会话视图 -->
     <div class="chat-body active" id="viewChat">
       <div id="messages">
@@ -388,11 +481,29 @@
       </section>
     </div>
 
+    <!-- 简历实时预览：边聊边看，每轮对话后自动刷新 -->
+    <aside class="resume-panel" id="resumePanel" hidden>
+      <div class="resume-panel-head">
+        <span>简历预览</span>
+        <div class="resume-panel-actions">
+          <button id="resumePrint" class="txt-btn" type="button">打印 / 存 PDF</button>
+          <button id="resumeClose" class="txt-btn" type="button">收起</button>
+        </div>
+      </div>
+      <div class="resume-viewport" id="resumeViewport">
+        <div class="resume-scaler" id="resumeScaler">
+          <iframe id="resumeFrame" class="resume-frame" title="简历预览"></iframe>
+        </div>
+      </div>
+    </aside>
+    </div>
+
     <div class="composer-wrap" id="composerWrap">
       <div class="wrap">
         <form id="composer">
           <input type="file" id="resumeFile" accept="application/pdf" hidden />
           <button type="button" id="uploadBtn" title="上传简历 PDF">上传简历</button>
+          <button type="button" id="previewBtn" title="预览生成的简历（可直接打印成 PDF）">预览简历</button>
           <textarea id="input" rows="1" placeholder="输入消息…"></textarea>
           <button id="send" type="submit" class="btn-primary">发送</button>
         </form>
@@ -581,6 +692,7 @@
     }
     loadThreads();
     loadApplications();
+    loadNotifications();
   }
 
   async function doAuth(path) {
@@ -792,6 +904,7 @@
     } catch { /* 忽略 */ }
     renderThreads(await fetchThreadsSafely());
     scrollDown();
+    refreshResumePreview(); // 换了会话，预览要跟着换
   }
 
   async function fetchThreadsSafely() {
@@ -812,6 +925,7 @@
     w.textContent = '已开启新会话，说说你想做什么？';
     messagesEl.appendChild(w);
     loadThreads();
+    refreshResumePreview(); // 新会话 → 重头开始攒简历
   }
 
   // ===== 发消息（SSE） =====
@@ -885,6 +999,7 @@
       sendBtn.disabled = false;
       inputEl.focus();
       loadThreads();
+      refreshResumePreview(); // 本轮可能补了简历信息，面板跟着刷新
     }
   }
 
@@ -923,8 +1038,12 @@
     viewApps.classList.toggle('active', apps);
     composerWrap.style.display = apps ? 'none' : '';
     chatTitle.textContent = apps ? '投递记录' : threadTitle;
-    if (apps) loadApplications();
-    else scrollDown();
+    if (apps) {
+      toggleResumePanel(false); // 投递视图是整页表格，预览面板让位
+      loadApplications();
+    } else {
+      scrollDown();
+    }
   }
 
   function opButton(label, cls, title, onClick) {
@@ -1153,6 +1272,64 @@
     el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submitApp(); } });
   }
 
+  // ===== 提醒：定时任务主动推来的内容（前端只读） =====
+  const bellBtn = document.getElementById('bellBtn');
+  const bellDot = document.getElementById('bellDot');
+  const notifPanel = document.getElementById('notifPanel');
+  const notifList = document.getElementById('notifList');
+
+  async function loadNotifications() {
+    if (!token) return;
+    try {
+      const resp = await fetch('/api/notifications', { headers: authHeaders() });
+      if (!resp.ok) return;
+      const data = await resp.json();
+
+      bellDot.hidden = !data.unread;
+      notifList.innerHTML = '';
+      if (!data.items.length) {
+        const empty = document.createElement('div');
+        empty.className = 'notif-empty';
+        empty.textContent = '暂无提醒';
+        notifList.appendChild(empty);
+        return;
+      }
+      // 用 DOM 拼而不是 innerHTML：提醒正文是模型生成的，直接插 HTML 有注入风险
+      for (const item of data.items) {
+        const box = document.createElement('div');
+        box.className = 'notif-item' + (item.is_read ? '' : ' unread');
+
+        const text = document.createElement('div');
+        text.textContent = item.content;
+
+        const time = document.createElement('div');
+        time.className = 'notif-time';
+        time.textContent = item.created_at;
+
+        box.appendChild(text);
+        box.appendChild(time);
+        notifList.appendChild(box);
+      }
+    } catch { /* 提醒拉不到不影响主流程 */ }
+  }
+
+  bellBtn.addEventListener('click', () => {
+    notifPanel.hidden = !notifPanel.hidden;
+    if (!notifPanel.hidden) loadNotifications();
+  });
+
+  document.getElementById('notifRead').addEventListener('click', async () => {
+    await fetch('/api/notifications/read', { method: 'POST', headers: authHeaders() });
+    loadNotifications();
+  });
+
+  // 点面板以外的区域就收起来
+  document.addEventListener('click', (e) => {
+    if (notifPanel.hidden) return;
+    if (notifPanel.contains(e.target) || bellBtn.contains(e.target)) return;
+    notifPanel.hidden = true;
+  });
+
   // ===== 底部输入与其它 =====
   composer.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -1195,6 +1372,9 @@
     appsData = { summary: '', items: [] };
     appsSummaryEl.textContent = '登录后查看';
     appsBodyEl.innerHTML = '';
+    bellDot.hidden = true;
+    notifPanel.hidden = true;
+    notifList.innerHTML = '';
     closeAppModal();
 
     loginUser.value = '';
@@ -1206,6 +1386,65 @@
   document.getElementById('doLogin').addEventListener('click', () => doAuth('login'));
   document.getElementById('doRegister').addEventListener('click', () => doAuth('register'));
   loginPass.addEventListener('keydown', (e) => { if (e.key === 'Enter') doAuth('login'); });
+
+  // ===== 简历实时预览：右侧面板，每轮对话后自动刷新 =====
+  const resumePanel = document.getElementById('resumePanel');
+  const resumeFrame = document.getElementById('resumeFrame');
+  const resumeViewport = document.getElementById('resumeViewport');
+  const resumeScaler = document.getElementById('resumeScaler');
+  const A4_WIDTH = 794; // A4 @96dpi
+
+  // 按面板实宽算出缩放比，写进 CSS 变量 --s：
+  // 外层 scaler 用「缩放后尺寸」参与布局，内层 iframe 保持 794px 真实宽度只做 transform。
+  function fitResumeFrame() {
+    if (resumePanel.hidden) return;
+    const usable = resumeViewport.clientWidth - 24; // 减去 padding
+    const scale = Math.max(0.3, Math.min(1, usable / A4_WIDTH));
+    resumeScaler.style.setProperty('--s', scale);
+  }
+
+  async function refreshResumePreview() {
+    if (resumePanel.hidden || !token) return;
+    try {
+      const resp = await fetch(
+        '/api/resume/preview?embed=1&thread_id=' + encodeURIComponent(threadId),
+        { headers: authHeaders() }
+      );
+      if (!resp.ok) return;
+      // 用 srcdoc 而不是 src：接口要 Authorization 头，iframe 的 src 带不了任何自定义头
+      resumeFrame.srcdoc = await resp.text();
+      fitResumeFrame();
+    } catch { /* 预览拉不到不影响对话主流程 */ }
+  }
+
+  function toggleResumePanel(show) {
+    const open = show === undefined ? resumePanel.hidden : show;
+    resumePanel.hidden = !open;
+    if (open) refreshResumePreview();
+  }
+
+  document.getElementById('resumeToggle').addEventListener('click', () => toggleResumePanel());
+  document.getElementById('resumeClose').addEventListener('click', () => toggleResumePanel(false));
+  document.getElementById('previewBtn').addEventListener('click', () => toggleResumePanel(true));
+  window.addEventListener('resize', fitResumeFrame);
+
+  // 打印 / 存 PDF：仍然开独立窗口。
+  // 不在 iframe 里调 print()——那会打到整个页面（连聊天区一起），不是只要简历。
+  document.getElementById('resumePrint').addEventListener('click', async () => {
+    if (!token) { requireLogin('请先登录'); return; }
+    try {
+      const resp = await fetch(
+        '/api/resume/preview?thread_id=' + encodeURIComponent(threadId),
+        { headers: authHeaders() }
+      );
+      if (resp.status === 401) { requireLogin('登录已失效，请重新登录'); return; }
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const html = await resp.text();
+      window.open(URL.createObjectURL(new Blob([html], { type: 'text/html' })), '_blank');
+    } catch (err) {
+      addNote('打开失败：' + err.message);
+    }
+  });
 
   // 上传简历：后端解析后写入会话 state，resume_coach 直接读，不需要用户粘贴
   const fileEl = document.getElementById('resumeFile');

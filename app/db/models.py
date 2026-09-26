@@ -21,6 +21,26 @@ class User(Base):
     created_at: Mapped[str] = mapped_column(String(32))
 
 
+class UserProfile(Base):
+    """用户画像：跨会话的长期记忆（目标岗位、技术栈、意向城市…）。
+
+    为什么用 KV 表而不是 users 表加一列 JSON：
+    画像是「一条一条加上去的」，KV 能按字段增量更新，也不必读改写整个 JSON
+    （JSON 列会有并发覆盖的问题）。代价是查询多一条语句，可接受。
+
+    列名用 field 而不是 key —— key 在 MySQL 里是保留字，会被迫到处加引号。
+    """
+
+    __tablename__ = "user_profiles"
+    __table_args__ = (UniqueConstraint("user_id", "field", name="uq_user_profile"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String(32), index=True)
+    field: Mapped[str] = mapped_column(String(32))
+    value: Mapped[str] = mapped_column(Text, default="")
+    updated_at: Mapped[str] = mapped_column(String(32))
+
+
 class Application(Base):
     """投递记录。唯一键含 user_id —— 多用户隔离靠它，不靠应用层过滤。"""
 
@@ -36,6 +56,25 @@ class Application(Base):
     status: Mapped[str] = mapped_column(String(16))
     note: Mapped[str] = mapped_column(Text, default="")
     updated_at: Mapped[str] = mapped_column(String(32))
+
+
+class Notification(Base):
+    """站内提醒：定时任务主动生成的内容（目前只有每日投递复盘）。
+
+    和 tool_calls / runs 不是一类：那两个是「运行痕迹」（排障用），
+    这个是「给用户看的正文」，属于业务数据。
+
+    列名用 is_read 而不是 read —— read 在 MySQL 里是关键字，虽然能用，
+    但每次写 SQL 都要确认一下，不值得。
+    """
+
+    __tablename__ = "notifications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String(32), index=True)
+    content: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[str] = mapped_column(String(32))
+    is_read: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class Thread(Base):

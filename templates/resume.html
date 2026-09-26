@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>{{ draft.name or '简历' }}</title>
+<style>
+  /* A4 + 窄边距：中文技术简历通常压到一页，边距给足但不过宽 */
+  @page { size: A4; margin: 12mm 14mm; }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: #f5f6f8;   /* 屏幕上的底色，打印时会被覆盖成白 */
+    font-family: "Times New Roman", "等线", "DengXian", "Microsoft YaHei", sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.55;
+    color: #111;
+    /* 让浏览器的「另存为 PDF」保留颜色（否则深蓝标题可能被打成灰） */
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* 屏幕预览时模拟一张 A4 纸。
+     没有这层的话，正文会被拉满整个窗口——1920 屏上完全不是简历的样子，
+     用户会误以为版式崩了（其实打印出来是对的）。 */
+  .page {
+    max-width: 210mm;
+    min-height: 297mm;
+    margin: 0 auto;
+    padding: 14mm 16mm;
+    background: #fff;
+  }
+
+  /* ===== 页眉：姓名居中，照片绝对定位在右上（不影响居中） ===== */
+  .header { position: relative; text-align: center; margin-bottom: 8px; }
+  .header h1 { margin: 0 0 4px; font-size: 20pt; font-weight: 700; letter-spacing: 2px; }
+  .contact { font-size: 10pt; color: #333; }
+  .intent { font-size: 10pt; color: #333; margin-top: 2px; }
+  .photo {
+    position: absolute; top: 0; right: 0;
+    width: 25mm; height: 33mm; object-fit: cover;
+    border: 1px solid #e0e0e0;
+  }
+
+  /* ===== 章节标题：深蓝 + 通栏下划线（这套版式最显眼的特征） ===== */
+  .section {
+    margin: 11px 0 5px;
+    padding-bottom: 2px;
+    font-size: 12.5pt; font-weight: 700; color: #1a4d8f;
+    border-bottom: 1.5px solid #1a4d8f;
+  }
+
+  /* ===== 三栏行：左标题 / 中角色 / 右时间，三列各占等份、中列居中 =====
+     用 grid 而不是 flex + space-between：后者配合 flex:1 的左列会把剩余空间
+     吃光，中列被挤到右边（实测踩过）。1fr auto 1fr 才能让中列真正居中。 */
+  .row {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: baseline;
+    gap: 10px;
+    margin-top: 5px;
+  }
+  .row .left { justify-self: start; font-weight: 700; }
+  .row .mid { justify-self: center; }
+  .row .right { justify-self: end; color: #333; }
+
+  p { margin: 2px 0; }
+  .label { font-weight: 700; }
+  .sub { font-weight: 700; margin-top: 3px; }
+
+  ul.bullets { margin: 2px 0 0; padding-left: 16px; }
+  ul.bullets li { margin: 1px 0; }
+
+  /* ===== 屏幕上的操作提示，打印时不出现 ===== */
+  .hint {
+    max-width: 210mm;
+    margin: 12px auto;
+    padding: 10px 14px;
+    background: #eef4ff; border: 1px solid #c7dbff; border-radius: 8px;
+    color: #1a4d8f; font-size: 12px; line-height: 1.7;
+  }
+  .hint b { font-weight: 700; }
+  .hint .missing { color: #b45309; }
+
+  @media print {
+    body { background: #fff; }
+    /* 打印时边距由 @page 负责，页面容器要脱掉自己的 padding，否则边距翻倍 */
+    .page { max-width: none; min-height: 0; margin: 0; padding: 0; }
+    .hint { display: none; }
+  }
+</style>
+</head>
+<body>
+
+{% if missing %}
+<div class="hint">
+  <b>这份简历还缺：</b><span class="missing">{{ missing | join('、') }}</span><br />
+  可以现在打印先看看版式，补完信息后重新打开本页会更完整。
+</div>
+{% elif not embed %}
+<div class="hint">
+  按 <b>Ctrl + P</b>（Mac 为 <b>⌘ + P</b>），目标选「另存为 PDF」即可保存。
+</div>
+{% endif %}
+
+<div class="page">
+
+  <div class="header">
+    {% if draft.photo %}<img class="photo" src="{{ draft.photo }}" alt="" />{% endif %}
+    <h1>{{ draft.name or '姓名' }}</h1>
+    <div class="contact">{{ draft.phone }}{% if draft.phone and draft.email %} | {% endif %}{{ draft.email }}</div>
+    {% if draft.intent %}<div class="intent">求职意向：{{ draft.intent }}</div>{% endif %}
+  </div>
+
+  {% if draft.education %}
+  <div class="section">教育经历</div>
+  {% for item in draft.education %}
+  <div class="row">
+    <span class="left">{{ item.school or '' }}</span>
+    <span class="mid">{{ item.major or '' }}{% if item.degree %}（{{ item.degree }}）{% endif %}</span>
+    <span class="right">{{ item.period or '' }}</span>
+  </div>
+  {% endfor %}
+  {% endif %}
+
+  {% if draft.projects %}
+  <div class="section">项目经历</div>
+  {% for item in draft.projects %}
+  <div class="row">
+    <span class="left">{{ item.name or '' }}</span>
+    <span class="mid">{{ item.role or '' }}</span>
+    <span class="right">{{ item.period or '' }}</span>
+  </div>
+  {% if item.intro %}<p><span class="label">项目简介：</span>{{ item.intro }}</p>{% endif %}
+  {% if item.stack %}<p><span class="label">技术栈：</span>{{ item.stack }}</p>{% endif %}
+  {% if item.highlights %}
+  <p class="sub">项目亮点</p>
+  <ul class="bullets">
+    {% for point in item.highlights %}<li>{{ point }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+  {% endfor %}
+  {% endif %}
+
+  {% if draft.experience %}
+  <div class="section">工作/实习经历</div>
+  {% for item in draft.experience %}
+  <div class="row">
+    <span class="left">{{ item.company or '' }}</span>
+    <span class="mid">{{ item.role or '' }}</span>
+    <span class="right">{{ item.period or '' }}</span>
+  </div>
+  {% if item.detail %}<p>{{ item.detail }}</p>{% endif %}
+  {% endfor %}
+  {% endif %}
+
+  {% if draft.skills %}
+  <div class="section">个人技能</div>
+  <ul class="bullets">
+    {% for item in draft.skills %}
+    <li><span class="label">{{ item.label or '' }}{% if item.label %}：{% endif %}</span>{{ item.detail or '' }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+</div>
+</body>
+</html>

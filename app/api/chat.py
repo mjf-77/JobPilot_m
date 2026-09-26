@@ -17,7 +17,8 @@ from langchain_core.messages import HumanMessage
 from langgraph.types import Command
 from pydantic import BaseModel, Field
 
-from app import auth, metering
+from app import auth, limits, metering
+from app.config import settings
 from app.db import runs, threads
 from app.events import set_sink
 from app.graph.checkpointer import get_checkpointer
@@ -61,9 +62,33 @@ def _stream_graph(graph_input, thread_id: str, user_id: int):
     把整图收敛到一个 worker 线程内执行，事件再用队列搬回生成器逐帧 yield。
 
     thread_id 会加上用户前缀：防止用户猜到别人的会话 id 就能读到别人的历史。
+
+    入口还做两件跨请求的事（见 app/limits.py）：
+    - 配额预检：今日 token 超限直接拒绝，省下这轮的模型花费
+    - 会话加锁：同一会话串行执行，避免并发请求互相覆盖 checkpoint 状态
     """
     scoped_thread = f"{user_id}:{thread_id}"
     config = {"configurable": {"thread_id": scoped_thread}}
+
+    exceeded, used = limits.quota_exceeded(user_id)
+    if exceeded:
+        yield _frame(
+            {
+                "type": "error",
+                "message": (
+                    f"今日 token 配额已用完（{used}/{settings.daily_token_quota}），"
+                    "明天 0 点自动重置。"
+                ),
+            }
+        )
+        return
+
+    if not limits.acquire_thread(scoped_thread):
+        yield _frame(
+            {"type": "error", "message": "该会话正在处理中，请等上一轮结束再发。"}
+        )
+        return
+
     events: queue.Queue = queue.Queue()
     box: dict = {}
 
@@ -90,52 +115,60 @@ def _stream_graph(graph_input, thread_id: str, user_id: int):
         finally:
             events.put(("end", None))
 
-    threading.Thread(target=worker, daemon=True).start()
+    try:
+        threading.Thread(target=worker, daemon=True).start()
 
-    started = time.perf_counter()
-    route = ""
-    while True:
-        kind, payload = events.get()
-        if kind == "end":
-            break
-        if payload.get("type") == "agent_switch" and not route:
-            route = payload.get("route", "")
-        yield _frame(payload)
+        started = time.perf_counter()
+        route = ""
+        while True:
+            kind, payload = events.get()
+            if kind == "end":
+                break
+            if payload.get("type") == "agent_switch" and not route:
+                route = payload.get("route", "")
+            yield _frame(payload)
 
-    usage = box.get("usage") or metering.Usage()
-    latency_ms = int((time.perf_counter() - started) * 1000)
-    error = box.get("error")
+        usage = box.get("usage") or metering.Usage()
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        error = box.get("error")
 
-    if error:
-        yield _frame({"type": "error", "message": error})
+        if error:
+            yield _frame({"type": "error", "message": error})
 
-    # 无论成功、失败还是客户端断开，这一次执行都要留痕
-    runs.save(
-        route=route,
-        llm_calls=usage.llm_calls,
-        tool_calls=usage.tool_calls,
-        prompt_tokens=usage.prompt_tokens,
-        completion_tokens=usage.completion_tokens,
-        cost_yuan=usage.cost_yuan,
-        latency_ms=latency_ms,
-        ok=not error,
-        thread_id=scoped_thread,
-    )
+        # 无论成功、失败还是客户端断开，这一次执行都要留痕
+        runs.save(
+            route=route,
+            llm_calls=usage.llm_calls,
+            tool_calls=usage.tool_calls,
+            prompt_tokens=usage.prompt_tokens,
+            completion_tokens=usage.completion_tokens,
+            cost_yuan=usage.cost_yuan,
+            latency_ms=latency_ms,
+            ok=not error,
+            thread_id=scoped_thread,
+        )
 
-    # 收尾帧带本轮用量，前端可以直接显示"本次消耗"
-    yield _frame(
-        {
-            "type": "done",
-            "usage": {
-                "llm_calls": usage.llm_calls,
-                "tool_calls": usage.tool_calls,
-                "prompt_tokens": usage.prompt_tokens,
-                "completion_tokens": usage.completion_tokens,
-                "cost_yuan": round(usage.cost_yuan, 6),
-                "latency_ms": latency_ms,
-            },
-        }
-    )
+        # 本轮实际消耗计入今日配额（跨请求累计，超了下次请求就会被拒）
+        limits.quota_add(user_id, usage.prompt_tokens + usage.completion_tokens)
+
+        # 收尾帧带本轮用量，前端可以直接显示"本次消耗"
+        yield _frame(
+            {
+                "type": "done",
+                "usage": {
+                    "llm_calls": usage.llm_calls,
+                    "tool_calls": usage.tool_calls,
+                    "prompt_tokens": usage.prompt_tokens,
+                    "completion_tokens": usage.completion_tokens,
+                    "cost_yuan": round(usage.cost_yuan, 6),
+                    "latency_ms": latency_ms,
+                },
+            }
+        )
+    finally:
+        # 客户端中途断开（生成器被关闭）也必须解锁，
+        # 否则这把锁要等 TTL 到点才释放，会话被白白锁住
+        limits.release_thread(scoped_thread)
 
 
 def _sse_response(generator) -> StreamingResponse:

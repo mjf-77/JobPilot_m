@@ -11,9 +11,9 @@ __pycache__/
 .venv/
 *.egg-info/
 
-# 部署脚本产物（SSH known_hosts）
-kh
-
 # 编辑器
 .vscode/
 .idea/
+
+# 部署用：SSH 已知主机指纹（本机产物，含虚机信息）
+kh

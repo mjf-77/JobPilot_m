@@ -1,19 +1,22 @@
 """FastAPI 入口：挂载 SSE 端点与前端页面。
 
-lifespan 里做预热：建 checkpoint 表 + 编译图，
+lifespan 里做预热：建 checkpoint 表 + 编译图 + 启动定时任务，
 这样首个请求不会因为初始化而明显变慢。
 """
 
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from app import scheduler
 from app.api.applications import router as applications_router
 from app.api.auth import router as auth_router
 from app.api.chat import get_graph
 from app.api.chat import router as chat_router
+from app.api.notifications import router as notifications_router
 from app.api.resume import router as resume_router
 from app.api.threads import router as threads_router
 from app.config import settings
@@ -22,13 +25,19 @@ from app.graph.checkpointer import get_checkpointer
 
 WEB_DIR = settings.base_dir / "web"
 
+# 让应用自己的 logger（app.*）也能输出。
+# 不加这行的话只有 WARNING 以上可见——定时任务静默启动，出问题也看不到线索。
+logging.basicConfig(level=logging.INFO, format="%(levelname)s [%(name)s] %(message)s")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):#`lifespan` 是 FastAPI 的**生命周期钩子**
     init_db()  # 业务表：SQLite 还是 MySQL 由 DATABASE_URL 决定
     get_checkpointer()  # checkpoint 表（LangGraph 用 SqliteSaver）
     get_graph()  # 编译图（进程内单例）
+    scheduler.start()  # 定时任务：每天生成投递复盘（Agent 主动发起，不是被动响应）
     yield
+    scheduler.shutdown()
 #- **应用启动的时候**：执行 `yield` 之前的代码
 # 执行到 `yield`：FastAPI 正式开始接收 HTTP 请求，服务对外提供服务
 
@@ -38,6 +47,7 @@ app.include_router(auth_router)
 app.include_router(resume_router)
 app.include_router(threads_router)
 app.include_router(applications_router)
+app.include_router(notifications_router)
 app.include_router(chat_router)  #注册路由，把我们写的`/api/chat`接口挂载进 app
 app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
 

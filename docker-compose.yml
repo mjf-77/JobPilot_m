@@ -14,6 +14,9 @@ services:
     environment:
       # 覆盖本地默认的 SQLite，指向本 compose 内的 mysql 服务
       DATABASE_URL: mysql+pymysql://jobpilot:${MYSQL_PASSWORD}@mysql:3306/jobpilot?charset=utf8mb4
+      # 会话锁与每日配额走 Redis。只等它就绪不做健康门禁：
+      # 连不上会自动降级（不锁不限流），不该因为缓存故障卡住整个服务启动
+      REDIS_URL: redis://redis:6379/0
     volumes:
       # checkpoint（SqliteSaver）与 Chroma 向量库都要持久化，
       # 否则每次重建容器，会话记忆和知识库索引全部丢失
@@ -21,6 +24,8 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+      redis:
+        condition: service_started
     restart: unless-stopped
 
   mysql:
@@ -39,6 +44,18 @@ services:
       timeout: 3s
       retries: 20
       start_period: 20s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    # 只存会话锁和当天计数：关掉持久化，重启后锁自动清空、配额重新计
+    # （真丢了也不影响，业务数据不在这里）
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     restart: unless-stopped
 
 volumes:
